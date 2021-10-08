@@ -1,0 +1,32 @@
+version: '2.4'
+services:
+  proxy:
+    image: traefik
+    ports:
+      - 80:80
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    container_name: traefik
+  backend:
+    build: backend
+    image: backend
+    labels:
+      - "traefik.docker.network=default"
+      - "traefik.frontend.rule=Host:${DOMAIN};Path:/api/"
+      - "traefik.enable=true"
+      - "traefik.port=8080"
+  frontend:
+    build: frontend
+    image: backend
+    labels:
+      - "traefik.docker.network=default"
+      - "traefik.frontend.rule=Host:${DOMAIN}"
+      - "traefik.enable=true"
+      - "traefik.port=80"
+  database:
+    image: mariadb
+    environment:
+      MYSQL_DATABASE: ${MYSQL_DATABASE}
+      MYSQL_USER: ${MYSQL_USER}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD}
+      MYSQL_RANDOM_ROOT_PASSWORD: ${MYSQL_RANDOM_ROOT_PASSWORD}

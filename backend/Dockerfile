@@ -1,13 +1,14 @@
-FROM adoptopenjdk:11-jre-hotspot as builder
-WORKDIR application
-ARG JAR_FILE=target/*.jar
-COPY ${JAR_FILE} application.jar
-RUN java -Djarmode=layertools -jar application.jar extract
+#
+# Build stage
+#
+FROM maven:3.6.0-jdk-11-slim AS build
+COPY application/src /home/app/src
+COPY application/pom.xml /home/app
+RUN mvn -B -f /home/app/pom.xml clean package 
 
-FROM adoptopenjdk:11-jre-hotspot
-WORKDIR application
-COPY --from=builder application/dependencies/ ./
-COPY --from=builder application/snapshot-dependencies/ ./
-COPY --from=builder application/resources/ ./
-COPY --from=builder application/application/ ./
-ENTRYPOINT ["java", "org.springframework.boot.loader.JarLauncher"]
+#
+# Package stage
+#
+FROM openjdk:11-jre-slim
+COPY --from=build /home/app/target/spring-backend-0.0.1-SNAPSHOT.jar /usr/local/lib/demo.jar
+ENTRYPOINT ["java","-jar","/usr/local/lib/demo.jar"]

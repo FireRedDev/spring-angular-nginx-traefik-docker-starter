@@ -3,30 +3,53 @@ services:
   proxy:
     image: traefik
     ports:
-      - 80:80
+      - "80:80"
+    command:
+      #- "--log.level=DEBUG"
+      - "--api.insecure=true"
+      - "--providers.docker=true"
+      - "--providers.docker.exposedbydefault=false"
+      - "--entrypoints.web.address=:80"
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
     container_name: traefik
   backend:
     build: backend
     image: backend
+    depends_on:
+      proxy:
+        condition: service_started
+      database:
+        condition: service_healthy
     labels:
-      - "traefik.docker.network=default"
-      - "traefik.frontend.rule=Host:${DOMAIN};Path:/api/"
       - "traefik.enable=true"
       - "traefik.port=8080"
+      - "traefik.docker.network=default"
+      - "traefik.http.routers.backend.rule=Host(`backend.${DOMAIN}`)"
+      - "traefik.http.services.backend.loadbalancer.server.port=8080"
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:mysql://database:3306/${MYSQL_DATABASE}
+      SPRING_DATASOURCE_USERNAME: ${MYSQL_USER}
+      SPRING_DATASOURCE_PASSWORD: ${MYSQL_PASSWORD}
   frontend:
     build: frontend
-    image: backend
+    image: frontend
+    depends_on:
+      - "backend"
     labels:
       - "traefik.docker.network=default"
-      - "traefik.frontend.rule=Host:${DOMAIN}"
       - "traefik.enable=true"
-      - "traefik.port=80"
+      - "traefik.http.routers.nginx.entrypoints=web"
+      - "traefik.http.routers.nginx.rule=Host(`frontend.${DOMAIN}`)"
   database:
     image: mariadb
     environment:
       MYSQL_DATABASE: ${MYSQL_DATABASE}
       MYSQL_USER: ${MYSQL_USER}
       MYSQL_PASSWORD: ${MYSQL_PASSWORD}
-      MYSQL_RANDOM_ROOT_PASSWORD: ${MYSQL_RANDOM_ROOT_PASSWORD}
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
+    healthcheck:
+      test: ["CMD-SHELL", 'mysql --database=$$MYSQL_DATABASE --password=$$MYSQL_ROOT_PASSWORD --execute="SELECT count(table_name) > 0 FROM information_schema.tables;" --skip-column-names -B']
+      interval: 30s
+      timeout: 10s
+      retries: 4
